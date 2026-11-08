@@ -166,6 +166,41 @@ final class GPUSession: ObservableObject {
         }
     }
 
+    // MARK: APK
+
+    @Published private(set) var toast: String?
+
+    /// Installs an APK with the SDK's own adb (`emulator-5554`).
+    func installAPK(_ url: URL) async {
+        guard phase == .ready else { show("Chờ Android khởi động xong rồi thử lại"); return }
+        let sdk = self.sdk
+        show("Đang cài \(url.lastPathComponent)…", clearAfter: nil)
+        do {
+            let output = try await DeviceSession.background { () -> String in
+                var out = ""
+                let status = try ToolRunner.runPublic(sdk.adbBinary,
+                    ["-s", "emulator-\(EmulatorProcess.consolePort)", "install", "-r", "-t", url.path]) { out += $0 + "\n" }
+                guard status == 0, out.contains("Success") else {
+                    throw ZephyrError.adb(out.split(separator: "\n").last.map(String.init) ?? "adb install thất bại")
+                }
+                return out
+            }
+            _ = output
+            show("Đã cài \(url.lastPathComponent)")
+        } catch {
+            show("Cài APK thất bại: \(error.localizedDescription)")
+        }
+    }
+
+    private func show(_ text: String, clearAfter: TimeInterval? = 4) {
+        toast = text
+        guard let clearAfter else { return }
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(clearAfter * 1e9))
+            if self?.toast == text { self?.toast = nil }
+        }
+    }
+
     // MARK: Input
 
     private struct TouchEvent { var x: Int; var y: Int; var pressed: Bool; var isMove: Bool }

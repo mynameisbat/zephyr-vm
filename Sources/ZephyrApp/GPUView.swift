@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import ZephyrCore
 
 /// GPU Mode section of the library window: SDK status, one-click setup and start.
@@ -75,6 +76,8 @@ struct GPUWindow: View {
     @ObservedObject var gpu: GPUSession
     @FocusState private var focused: Bool
     @State private var dragging = false
+    @State private var dropTargeted = false
+    @State private var choosingAPK = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -87,8 +90,36 @@ struct GPUWindow: View {
                     overlay
                 }
             }
+            .overlay {
+                if dropTargeted {
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [8]))
+                        .overlay(Text("Thả APK để cài").font(.title3.bold()).foregroundStyle(.white))
+                        .padding(12)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if let toast = gpu.toast {
+                    Text(toast).font(.callout)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.bottom, 24)
+                }
+            }
             .frame(minWidth: 240, minHeight: 360)
+            .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
+                for provider in providers {
+                    _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                        guard let url, url.pathExtension.lowercased() == "apk" else { return }
+                        Task { @MainActor in await gpu.installAPK(url) }
+                    }
+                }
+                return true
+            }
             rail
+        }
+        .fileImporter(isPresented: $choosingAPK, allowedContentTypes: [UTType(filenameExtension: "apk") ?? .data]) { result in
+            if case let .success(url) = result { Task { await gpu.installAPK(url) } }
         }
         .background(Color(nsColor: .windowBackgroundColor))
         .navigationTitle("GPU Mode")
@@ -164,6 +195,8 @@ struct GPUWindow: View {
             railButton("chevron.backward", "Quay lại") { gpu.key("GoBack") }
             railButton("circle", "Màn hình chính") { gpu.key("GoHome") }
             railButton("square", "Ứng dụng gần đây") { gpu.key("AppSwitch") }
+            Divider().frame(width: 24)
+            railButton("shippingbox", "Cài APK…") { choosingAPK = true }
             Spacer()
             railButton("stop.circle", "Tắt emulator") { Task { await gpu.stop() } }
         }

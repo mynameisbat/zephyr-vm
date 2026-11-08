@@ -179,7 +179,12 @@ public struct AndroidSDK {
 }
 
 /// Runs a child process, streaming its combined output line by line.
-enum ToolRunner {
+public enum ToolRunner {
+    /// Public entry point for app code that needs to run an SDK tool (e.g. adb).
+    public static func runPublic(_ exe: URL, _ args: [String], onLine: @escaping (String) -> Void) throws -> Int32 {
+        try run(exe, args, env: [:], stdin: nil, onLine: onLine)
+    }
+
     static func run(_ exe: URL, _ args: [String], env: [String: String], stdin: String?,
                     onLine: @escaping (String) -> Void) throws -> Int32 {
         let p = Process()
